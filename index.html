@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Estratégico Integrado SESI/SENAI</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Versões fixas e estáveis) -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Prop-types (Necessário para Recharts funcionar via CDN) -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    
+    <!-- Recharts (Versão 2.10.0 - Estável para UMD) -->
+    <script src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
+    
+    <!-- Lucide Icons (Versão compatível com a API usada) -->
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Smooth scrolling */
+        html { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- SETUP DE BIBLIOTECAS ---
+        const { useState, useMemo, useEffect } = React;
+        
+        // Desestruturação segura do Recharts global
+        const { 
+            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+            ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, 
+            PolarRadiusAxis, Radar, LabelList, ReferenceLine 
+        } = window.Recharts;
+
+        // --- COMPONENTE DE ÍCONE ADAPTADO ---
+        // Renderiza ícones Lucide via SVG string
+        const LucideIcon = ({ name, size = 24, className = "" }) => {
+            const [svgContent, setSvgContent] = useState('');
+
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
+                    const iconDef = window.lucide.icons[name];
+                    // Verifica se a função toSVG existe (API v0.x)
+                    if (typeof iconDef.toSVG === 'function') {
+                        const svgString = iconDef.toSVG({
+                            width: size,
+                            height: size,
+                            class: className
+                        });
+                        setSvgContent(svgString);
+                    }
+                }
+            }, [name, size, className]);
+
+            return <span dangerouslySetInnerHTML={{ __html: svgContent }} className="inline-flex items-center justify-center" />;
+        };
+
+        // Mapeamento dos ícones usados
+        const LayoutDashboard = (props) => <LucideIcon name="layout-dashboard" {...props} />;
+        const Users = (props) => <LucideIcon name="users" {...props} />;
+        const Star = (props) => <LucideIcon name="star" {...props} />;
+        const TrendingUp = (props) => <LucideIcon name="trending-up" {...props} />;
+        const TrendingDown = (props) => <LucideIcon name="trending-down" {...props} />;
+        const Calendar = (props) => <LucideIcon name="calendar" {...props} />;
+        const School = (props) => <LucideIcon name="school" {...props} />;
+        const AlertCircle = (props) => <LucideIcon name="alert-circle" {...props} />;
+        const CheckCircle = (props) => <LucideIcon name="check-circle" {...props} />;
+        const Lightbulb = (props) => <LucideIcon name="lightbulb" {...props} />;
+        const Info = (props) => <LucideIcon name="info" {...props} />;
+        const Filter = (props) => <LucideIcon name="filter" {...props} />;
+        const BrainCircuit = (props) => <LucideIcon name="brain-circuit" {...props} />;
+        const Building2 = (props) => <LucideIcon name="building-2" {...props} />;
+        const BookOpen = (props) => <LucideIcon name="book-open" {...props} />;
+        const History = (props) => <LucideIcon name="history" {...props} />;
+
+
+        // --- DADOS ---
+        
+        // SESI
+        const sesiGeneral = [
+            { year: 2024, total: 8183, direcao: 81.84, secretaria: 82.85, instalacoes: 79.54, supervisor: 78.97, professores: 79.42, satisfacao: 80.53 },
+            { year: 2025, total: 12423, direcao: 83.24, secretaria: 85.80, instalacoes: 80.74, supervisor: 78.85, professores: 80.13, satisfacao: 81.75 }
+        ];
+
+        const sesiUnits2024 = [
+            { escola: "CAT CELSO CHARURI", total: 340, direcao: 94.12, secretaria: 95.88, instalacoes: 98.53, supervisor: 90.59, professores: 91.47, satisfacao: 94.12 },
+            { escola: "CAT COLORADO", total: 872, direcao: 92.89, secretaria: 91.74, instalacoes: 90.25, supervisor: 91.51, professores: 93.92, satisfacao: 92.06 },
+            { escola: "ESCOLA SESI VOTORANTIM METAIS", total: 119, direcao: 99.16, secretaria: 81.51, instalacoes: 93.28, supervisor: 87.39, professores: 94.12, satisfacao: 91.09 },
+            { escola: "ESCOLA-teste", total: 147, direcao: 96.6, secretaria: 93.88, instalacoes: 91.84, supervisor: 91.84, professores: 76.87, satisfacao: 90.2 },
+            { escola: "ESCOLA SESI CRIXÁS", total: 501, direcao: 91.02, secretaria: 92.81, instalacoes: 87.62, supervisor: 87.23, professores: 85.63, satisfacao: 88.86 },
+            { escola: "ESCOLA SESI JAIARA", total: 182, direcao: 89.56, secretaria: 90.66, instalacoes: 84.62, supervisor: 87.91, professores: 90.11, satisfacao: 88.57 },
+            { escola: "ESCOLA SESI CATALÃO", total: 285, direcao: 89.82, secretaria: 91.93, instalacoes: 86.32, supervisor: 86.67, professores: 85.26, satisfacao: 88 },
+            { escola: "SESI FLORES DE GOIAS", total: 13, direcao: 100, secretaria: 61.54, instalacoes: 61.54, supervisor: 69.23, professores: 84.62, satisfacao: 85.71 }
+        ];
+
+        const sesiUnits2025 = [
+            { escola: "SESI SENAI BARRO ALTO", total: 27, direcao: 100, secretaria: 100, instalacoes: 100, supervisor: 100, professores: 92.59, satisfacao: 98.52 },
+            { escola: "CAT COLORADO", total: 973, direcao: 93.32, secretaria: 92.7, instalacoes: 91.98, supervisor: 84.58, professores: 93.53, satisfacao: 91.22 },
+            { escola: "ESCOLA SESI VOTORANTIM METAIS", total: 262, direcao: 91.22, secretaria: 92.37, instalacoes: 84.73, supervisor: 91.98, professores: 80.92, satisfacao: 88.24 },
+            { escola: "ESCOLA SESI CRIXÁS", total: 868, direcao: 91.36, secretaria: 94.35, instalacoes: 84.22, supervisor: 85.37, professores: 85.14, satisfacao: 88.09 },
+            { escola: "SESI UNIVERSITARIO", total: 206, direcao: 94.17, secretaria: 87.86, instalacoes: 95.63, supervisor: 81.55, professores: 81.07, satisfacao: 88.06 },
+            { escola: "CAT MOZART SOARES FILHO", total: 452, direcao: 88.05, secretaria: 88.27, instalacoes: 90.93, supervisor: 86.73, professores: 84.07, satisfacao: 87.61 },
+            { escola: "ESCOLA SESI JAIARA", total: 982, direcao: 91.45, secretaria: 91.65, instalacoes: 87.88, supervisor: 79.23, professores: 84.93, satisfacao: 87.03 },
+            { escola: "ESCOLA SESI FLORES DE GOIAS", total: 392, direcao: 90.82, secretaria: 88.52, instalacoes: 83.16, supervisor: 82.65, professores: 82.14, satisfacao: 85.46 },
+            { escola: "ESCOLA SESI CATALÃO", total: 423, direcao: 91.50, secretaria: 90.20, instalacoes: 88.40, supervisor: 85.50, professores: 87.10, satisfacao: 89.50 }
+        ];
+
+        // SENAI
+        const senaiGeneral = [
+            { year: 2024, total: 24820, infra: 88.38, atendimento: 91.34, professores: 94.24, satisfacao: 91.32 },
+            { year: 2025, total: 54814, infra: 86.98, atendimento: 88.08, professores: 91.25, satisfacao: 88.77 }
+        ];
+
+        const senaiUnits2024 = [
+            { escola: "ESCOLA SENAI DR. CELSO CHARURI", total: 321, infra: 94.7, atendimento: 96.57, professores: 98.13, satisfacao: 96.47 },
+            { escola: "ESCOLA SENAI JARDIM COLORADO", total: 613, infra: 94.13, atendimento: 93.8, professores: 97.06, satisfacao: 95 },
+            { escola: "NÚCLEO DE FORMAÇÃO PROFISSIONAL SENAI SENADOR CANEDO", total: 1478, infra: 88.29, atendimento: 96.68, professores: 96.21, satisfacao: 93.73 },
+            { escola: "FACULDADE DE TECNOLOGIA SENAI DE DESENVOLVIMENTO GERENCIAL", total: 1683, infra: 94.06, atendimento: 93.82, professores: 93.23, satisfacao: 93.7 },
+            { escola: "ESCOLA SENAI FERNANDO BEZERRA", total: 1987, infra: 91.04, atendimento: 93.36, professores: 95.22, satisfacao: 93.21 },
+            { escola: "ESCOLA SENAI ITUMBIARA", total: 4018, infra: 92.31, atendimento: 93.35, professores: 93.73, satisfacao: 93.13 },
+            { escola: "FATEC SENAI ÍTALO BOLOGNA", total: 2649, infra: 90.52, atendimento: 92, professores: 93.96, satisfacao: 92.16 },
+            { escola: "ESCOLA SENAI CATALÃO", total: 4264, infra: 88.48, atendimento: 90.22, professores: 95.97, satisfacao: 91.56 },
+            { escola: "SENAI MINEIROS", total: 777, infra: 84.56, atendimento: 94.72, professores: 93.69, satisfacao: 90.99 }
+        ];
+
+        const senaiUnits2025 = [
+            { escola: "ESCOLA SENAI FERNANDO BEZERRA", total: 479, infra: 93.74, atendimento: 96.87, professores: 98.54, satisfacao: 96.38 },
+            { escola: "ESCOLA SENAI SAMA", total: 199, infra: 86.93, atendimento: 97.49, professores: 100, satisfacao: 94.81 },
+            { escola: "FATEC SENAI ÍTALO BOLOGNA", total: 2610, infra: 91.19, atendimento: 93.18, professores: 96.63, satisfacao: 93.67 },
+            { escola: "ESCOLA SENAI ITUMBIARA", total: 10288, infra: 90.73, atendimento: 92.76, professores: 94.31, satisfacao: 92.6 },
+            { escola: "ESCOLA SENAI NIQUELÂNDIA", total: 1640, infra: 91.04, atendimento: 91.71, professores: 95, satisfacao: 92.58 },
+            { escola: "ESCOLA SENAI CATALÃO", total: 4364, infra: 91.41, atendimento: 90.19, professores: 94.87, satisfacao: 92.16 },
+            { escola: "ESCOLA SENAI VILA CANAÃ", total: 8597, infra: 89.14, atendimento: 93.21, professores: 93.74, satisfacao: 92.03 },
+            { escola: "FACULDADE DE TECNOLOGIA SENAI DE DESENVOLVIMENTO GERENCIAL", total: 2068, infra: 92.99, atendimento: 89.85, professores: 89.36, satisfacao: 90.73 },
+            { escola: "UNIDADE INTEGRADA SESI/SENAI DE QUIRINÓPOLIS", total: 2350, infra: 87.91, atendimento: 91.91, professores: 90.34, satisfacao: 90.06 }
+        ];
+
+        // --- SUB-COMPONENTES UI ---
+
+        const NoteFooter = () => (
+            <p className="text-[10px] text-slate-400 mt-2 italic text-right w-full pt-1 border-t border-slate-50">
+                *Obs.: Dados de 2025 referem-se ao acumulado jan-nov.
+            </p>
+        );
+
+        const GuideBox = () => (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 mb-8 text-sm text-slate-600 leading-relaxed shadow-sm">
+                <h2 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
+                <BookOpen size={18} className="text-blue-600" />
+                Guia de Leitura Rápida
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <strong className="block text-slate-800 mb-1 flex items-center gap-1.5"><Filter size={14} className="text-blue-500"/> 1. Contexto & Filtros</strong>
+                    <p className="text-xs">Este painel consolida a percepção de qualidade das redes SESI e SENAI. Utilize os botões superiores para alternar entre as entidades e os menus para filtrar por unidade escolar ou recorte temporal (2024/2025).</p>
+                </div>
+                <div>
+                    <strong className="block text-slate-800 mb-1 flex items-center gap-1.5"><History size={14} className="text-blue-500"/> 2. Comparativo Histórico</strong>
+                    <p className="text-xs">Ao selecionar uma Unidade Específica e o modo "Comparativo", o painel analisa automaticamente se a escola evoluiu ou regrediu em relação ao ano anterior, gerando insights textuais exclusivos.</p>
+                </div>
+                <div>
+                    <strong className="block text-slate-800 mb-1 flex items-center gap-1.5"><BrainCircuit size={14} className="text-blue-500"/> 3. Inteligência de Dados</strong>
+                    <p className="text-xs">Abaixo de cada gráfico, os boxes de <strong>Análise Estratégica</strong> funcionam como um "consultor virtual", interpretando os dados automaticamente para apontar pontos de atenção ou excelência.</p>
+                </div>
+                </div>
+            </div>
+        );
+
+        const StrategicAnalysisBox = ({ text, type = 'neutral' }) => {
+            const colors = {
+                positive: 'bg-emerald-50 border-emerald-100 text-emerald-800',
+                negative: 'bg-rose-50 border-rose-100 text-rose-800',
+                neutral: 'bg-indigo-50 border-indigo-100 text-indigo-800',
+                warning: 'bg-amber-50 border-amber-100 text-amber-800'
+            };
+            const activeColor = colors[type] || colors.neutral;
+
+            return (
+                <div className={`mt-4 p-3 rounded-lg border text-xs leading-relaxed flex gap-2 items-start ${activeColor}`}>
+                    <BrainCircuit size={16} className="shrink-0 mt-0.5" />
+                    <span className="font-medium">{text}</span>
+                </div>
+            );
+        };
+
+        const KPI_Card = ({ title, value, subtext, icon: Icon, trend, explanation, highlight }) => (
+            <div className={`p-5 rounded-xl shadow-sm border flex flex-col justify-between h-full transition-all hover:shadow-md ${highlight ? 'bg-blue-50 border-blue-100' : 'bg-white border-slate-100'}`}>
+                <div>
+                <div className="flex items-start justify-between mb-3">
+                    <div>
+                        <p className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wide">{title}</p>
+                        <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+                        {subtext && <div className={`flex items-center gap-1 text-xs mt-2 font-bold ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-slate-500'}`}>
+                            {trend === 'up' && <TrendingUp size={14} />}
+                            {trend === 'down' && <TrendingDown size={14} />}
+                            {trend === 'neutral' && <Calendar size={14} />}
+                            <span>{subtext}</span>
+                        </div>}
+                    </div>
+                    <div className={`p-3 rounded-lg shadow-sm ${trend === 'up' ? 'bg-green-100 text-green-700' : trend === 'down' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <Icon size={24} />
+                    </div>
+                </div>
+                {explanation && (
+                    <div className={`mt-3 pt-3 border-t ${highlight ? 'border-blue-200' : 'border-slate-100'}`}>
+                        <p className={`text-xs leading-relaxed flex gap-2 items-start ${highlight ? 'text-blue-600' : 'text-slate-500'}`}>
+                            <Info size={14} className="mt-0.5 shrink-0 opacity-70" />
+                            <span>{explanation}</span>
+                        </p>
+                    </div>
+                )}
+                </div>
+            </div>
+        );
+
+        // --- COMPONENTE PRINCIPAL ---
+
+        function IntegratedDashboard() {
+            const [entity, setEntity] = useState("SESI");
+            const [selectedUnit, setSelectedUnit] = useState("TODAS");
+            const [yearView, setYearView] = useState("COMPARATIVO"); 
+
+            // Configuração dos dados baseada na entidade
+            const entityConfig = useMemo(() => {
+                if (entity === 'SESI') {
+                    return {
+                        color: '#2563eb', // Azul
+                        criteria: [
+                            { key: 'direcao', label: 'Direção' },
+                            { key: 'secretaria', label: 'Secretaria' },
+                            { key: 'instalacoes', label: 'Instalações' },
+                            { key: 'supervisor', label: 'Supervisão' },
+                            { key: 'professores', label: 'Professores' }
+                        ],
+                        general: sesiGeneral,
+                        units24: sesiUnits2024,
+                        units25: sesiUnits2025
+                    };
+                } else {
+                    return {
+                        color: '#ea580c', // Laranja
+                        criteria: [
+                            { key: 'infra', label: 'Infraestrutura' },
+                            { key: 'atendimento', label: 'Atendimento' },
+                            { key: 'professores', label: 'Professores' }
+                        ],
+                        general: senaiGeneral,
+                        units24: senaiUnits2024,
+                        units25: senaiUnits2025
+                    };
+                }
+            }, [entity]);
+
+            // Listagem de nomes para o dropdown
+            const allSchoolNames = useMemo(() => {
+                const names = new Set([
+                    ...entityConfig.units24.map(u => u.escola),
+                    ...entityConfig.units25.map(u => u.escola)
+                ]);
+                return Array.from(names).sort();
+            }, [entityConfig]);
+
+            // Resetar seleção se a unidade não existir na nova entidade
+            useEffect(() => {
+                if (selectedUnit !== "TODAS" && !allSchoolNames.includes(selectedUnit)) {
+                    setSelectedUnit("TODAS");
+                }
+            }, [entity, allSchoolNames]);
+
+            // Determinar dados atuais
+            const currentData = useMemo(() => {
+                let d24 = null;
+                let d25 = null;
+
+                if (selectedUnit === "TODAS") {
+                    d24 = entityConfig.general.find(d => d.year === 2024);
+                    d25 = entityConfig.general.find(d => d.year === 2025);
+                } else {
+                    d24 = { ...entityConfig.units24.find(u => u.escola === selectedUnit), year: 2024 };
+                    d25 = { ...entityConfig.units25.find(u => u.escola === selectedUnit), year: 2025 };
+                    
+                    if (!d24.escola) d24 = { year: 2024, total: 0, satisfacao: 0 };
+                    if (!d25.escola) d25 = { year: 2025, total: 0, satisfacao: 0 };
+                }
+                
+                // Preencher chaves faltantes com 0
+                entityConfig.criteria.forEach(c => {
+                    if (d24 && d24[c.key] === undefined) d24[c.key] = 0;
+                    if (d25 && d25[c.key] === undefined) d25[c.key] = 0;
+                });
+
+                return [d24, d25];
+            }, [selectedUnit, entityConfig]);
+
+            // Dados para gráficos
+            const radarData = useMemo(() => {
+                const [d24, d25] = currentData;
+                return entityConfig.criteria.map(c => ({
+                    subject: c.label,
+                    A: d24[c.key],
+                    B: d25[c.key],
+                    fullMark: 100
+                }));
+            }, [currentData, entityConfig]);
+
+            const barData = useMemo(() => {
+                const [d24, d25] = currentData;
+                const bars = entityConfig.criteria.map(c => ({
+                    name: c.label,
+                    '2024': d24[c.key],
+                    '2025': d25[c.key]
+                }));
+                bars.push({
+                    name: 'Geral',
+                    '2024': d24.satisfacao || 0,
+                    '2025': d25.satisfacao || 0
+                });
+                return bars;
+            }, [currentData, entityConfig]);
+
+            const rankingData = useMemo(() => {
+                let source = [];
+                if (yearView === '2024') source = entityConfig.units24;
+                else source = entityConfig.units25; 
+
+                return [...source]
+                .sort((a, b) => b.satisfacao - a.satisfacao)
+                .map(u => ({
+                    name: u.escola,
+                    satisfacao: u.satisfacao,
+                    total: u.total
+                }));
+            }, [yearView, entityConfig]);
+
+            const averageSatisfaction = useMemo(() => {
+                if (rankingData.length === 0) return 0;
+                const total = rankingData.reduce((acc, curr) => acc + curr.satisfacao, 0);
+                return (total / rankingData.length).toFixed(1);
+            }, [rankingData]);
+
+            // KPIs
+            const kpiStats = useMemo(() => {
+                const [d24, d25] = currentData;
+                
+                if (yearView === 'COMPARATIVO') {
+                    const satChange = (d25.satisfacao - d24.satisfacao).toFixed(2);
+                    const totalResp = (d24.total || 0) + (d25.total || 0);
+                    const growth = d24.total > 0 ? (((d25.total - d24.total) / d24.total) * 100).toFixed(1) : 0;
+                    
+                    return {
+                        mode: 'COMPARATIVO',
+                        satisfaction: { val: d25.satisfacao || 0, sub: `${satChange > 0 ? '+' : ''}${satChange} p.p. vs 2024`, trend: satChange >= 0 ? 'up' : 'down', exp: "Índice 2025 comparado a 2024." },
+                        total: { val: totalResp, sub: "Acumulado (24+25)", trend: 'neutral', exp: "Soma de respondentes dos dois anos." },
+                        growth: { val: `${growth > 0 ? '+' : ''}${growth}%`, sub: "Variação Anual", trend: growth >= 0 ? 'up' : 'down', exp: "Crescimento da base de respostas de 2024 para 2025." },
+                        critical: getCriticalPoint(d25, entityConfig.criteria)
+                    };
+                } else {
+                    const targetData = yearView === '2024' ? d24 : d25;
+                    const yearLabel = yearView;
+                    return {
+                        mode: 'SINGLE',
+                        satisfaction: { val: targetData.satisfacao || "N/A", sub: `Ano Base ${yearLabel}`, trend: 'neutral', exp: `Índice de satisfação consolidado de ${yearLabel}.` },
+                        total: { val: targetData.total || 0, sub: `Respondentes ${yearLabel}`, trend: 'neutral', exp: `Total de avaliações recebidas apenas em ${yearLabel}.` },
+                        growth: { val: "---", sub: "Sem comparação", trend: 'neutral', exp: "Selecione 'Comparativo' para ver evolução." },
+                        critical: getCriticalPoint(targetData, entityConfig.criteria)
+                    };
+                }
+            }, [currentData, yearView, entityConfig]);
+
+            function getCriticalPoint(data, criteria) {
+                if (!data || data.total === 0) return { name: "N/A", val: 0 };
+                let minVal = 101;
+                let minName = "N/A";
+                criteria.forEach(c => {
+                    const val = data[c.key];
+                    if (val !== undefined && val > 0 && val < minVal) {
+                        minVal = val;
+                        minName = c.label;
+                    }
+                });
+                return { name: minName, val: minVal === 101 ? 0 : minVal };
+            }
+
+            // Insights
+            const getInsights = () => {
+                const d24 = currentData[0];
+                const d25 = currentData[1];
+                const targetData = yearView === '2024' ? d24 : d25;
+
+                // Radar
+                let radarInsight = { text: "Sem dados suficientes.", type: "neutral" };
+                if (targetData.total) {
+                    const scores = entityConfig.criteria.map(c => ({ n: c.label, v: targetData[c.key] || 0 })).sort((a,b) => b.v - a.v);
+                    const best = scores[0];
+                    const worst = scores[scores.length - 1];
+                    const gap = (best.v - worst.v).toFixed(1);
+
+                    if (gap > 10) radarInsight = { text: `Assimetria identificada: O pilar ${best.n} (${best.v}%) sustenta a nota, mas ${worst.n} (${worst.v}%) apresenta gap de ${gap} pontos.`, type: 'negative' };
+                    else radarInsight = { text: `Consistência operacional. Os indicadores apresentam equilíbrio com gap máximo de apenas ${gap} pontos.`, type: 'positive' };
+                }
+
+                // Bar
+                let barInsight = { text: `Selecione "Comparativo" para análises temporais.`, type: "neutral" };
+                if (yearView === 'COMPARATIVO') {
+                    if (d24.total > 0 && d25.total > 0) {
+                        const changes = entityConfig.criteria.map(c => ({ 
+                            n: c.label, 
+                            v: (d25[c.key] || 0) - (d24[c.key] || 0) 
+                        })).sort((a,b) => b.v - a.v);
+                        
+                        const generalChange = (d25.satisfacao - d24.satisfacao).toFixed(2);
+                        const bestEvol = changes[0];
+                        const worstEvol = changes[changes.length - 1];
+                        
+                        let unitNameText = selectedUnit === 'TODAS' ? `A Rede ${entity}` : `A unidade ${selectedUnit}`;
+                        let trendText = generalChange >= 0 ? 'avanço' : 'recuo';
+                        let trendType = generalChange >= 0 ? 'positive' : 'negative';
+
+                        barInsight = { 
+                            text: `${unitNameText} registrou ${trendText} de ${Math.abs(generalChange)} pontos na satisfação geral. O indicador ${bestEvol.n} foi o destaque positivo (+${bestEvol.v.toFixed(1)}%), enquanto ${worstEvol.n} teve variação de ${worstEvol.v.toFixed(1)}%.`, 
+                            type: trendType 
+                        };
+                    } else if (d25.total > 0 && d24.total === 0) {
+                        barInsight = { text: `Dados históricos de 2024 não disponíveis para esta unidade. Exibindo apenas performance do ciclo atual (2025).`, type: "warning" };
+                    } else if (d25.total === 0 && d24.total > 0) {
+                        barInsight = { text: `Ainda não há dados computados para o ciclo 2025 desta unidade. Exibindo histórico de 2024.`, type: "warning" };
+                    }
+                }
+
+                // Ranking
+                let rankingInsight = { text: "Dados insuficientes para ranking.", type: "neutral" };
+                if (selectedUnit === 'TODAS') {
+                    const avg = rankingData.length > 0 ? rankingData.reduce((acc, curr) => acc + curr.satisfacao, 0) / rankingData.length : 0;
+                    const top = rankingData[0];
+                    rankingInsight = { text: `Média da rede ${entity}: ${avg.toFixed(1)}%. Unidade líder: ${top?.name || 'N/A'}.`, type: 'neutral' };
+                } else {
+                    const myRankIndex = rankingData.findIndex(u => u.name === selectedUnit);
+                    if (myRankIndex !== -1) {
+                        const position = myRankIndex + 1;
+                        const totalUnits = rankingData.length;
+                        if (position === 1) rankingInsight = { text: `Liderança da Rede ${entity}! Melhor índice de satisfação do período.`, type: 'positive' };
+                        else if (position <= 3) rankingInsight = { text: `Top Performer: Unidade entre as 3 melhores da rede ${entity}.`, type: 'positive' };
+                        else rankingInsight = { text: `Unidade na ${position}ª posição de ${totalUnits}. Oportunidade de benchmarking com os líderes.`, type: 'neutral' };
+                    }
+                }
+
+                return { radarInsight, barInsight, rankingInsight };
+            };
+
+            const { radarInsight, barInsight, rankingInsight } = getInsights();
+
+            return (
+                <div className="container mx-auto max-w-7xl">
+                    
+                    {/* Header */}
+                    <div className="mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+                        <div>
+                        <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                            <LayoutDashboard className={entity === 'SESI' ? "text-blue-600" : "text-orange-600"} />
+                            Painel Estratégico Integrado
+                        </h1>
+                        <p className="text-slate-500 mt-1 flex items-center gap-2">
+                            <Filter size={14} />
+                            Filtro Ativo: <span className={`font-bold ${entity === 'SESI' ? 'text-blue-700' : 'text-orange-700'}`}>{entity}</span> | {selectedUnit} | {yearView}
+                        </p>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="bg-slate-200 p-1 rounded-lg flex items-center">
+                                <button 
+                                    onClick={() => { setEntity('SESI'); setSelectedUnit('TODAS'); }}
+                                    className={`px-6 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${entity === 'SESI' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <School size={16} /> SESI
+                                </button>
+                                <button 
+                                    onClick={() => { setEntity('SENAI'); setSelectedUnit('TODAS'); }}
+                                    className={`px-6 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${entity === 'SENAI' ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <Building2 size={16} /> SENAI
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-3 bg-white p-2 rounded-lg shadow-sm border border-slate-200">
+                            <div className="flex items-center gap-2 px-2">
+                                <School size={18} className="text-slate-400" />
+                                <select 
+                                className="bg-transparent border-none outline-none font-medium text-slate-700 min-w-[200px] cursor-pointer max-w-[250px]"
+                                value={selectedUnit}
+                                onChange={(e) => setSelectedUnit(e.target.value)}
+                                >
+                                <option value="TODAS">Visão Geral (Rede {entity})</option>
+                                {allSchoolNames.map(school => (
+                                    <option key={school} value={school}>{school}</option>
+                                ))}
+                                </select>
+                            </div>
+                            <div className="w-px bg-slate-200 hidden sm:block"></div>
+                            <div className="flex items-center gap-2 px-2">
+                                <Calendar size={18} className="text-slate-400" />
+                                <select 
+                                className="bg-transparent border-none outline-none font-medium text-slate-700 cursor-pointer"
+                                value={yearView}
+                                onChange={(e) => setYearView(e.target.value)}
+                                >
+                                <option value="COMPARATIVO">Comparativo (24/25)</option>
+                                <option value="2025">Apenas 2025</option>
+                                <option value="2024">Apenas 2024</option>
+                                </select>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <GuideBox />
+
+                    {/* KPIs */}
+                    <div className="mb-8">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Indicadores Chave (KPIs)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <KPI_Card 
+                                title={`Satisfação ${entity}`}
+                                value={`${kpiStats.satisfaction.val}%`} 
+                                subtext={kpiStats.satisfaction.sub}
+                                trend={kpiStats.satisfaction.trend}
+                                icon={Star}
+                                explanation={kpiStats.satisfaction.exp}
+                                highlight={true}
+                            />
+                            <KPI_Card 
+                                title="Total Respondentes" 
+                                value={Number(kpiStats.total.val).toLocaleString()} 
+                                subtext={kpiStats.total.sub}
+                                trend={kpiStats.total.trend}
+                                icon={Users}
+                                explanation={kpiStats.total.exp}
+                            />
+                            <KPI_Card 
+                                title="Crescimento Base" 
+                                value={kpiStats.growth.val} 
+                                subtext={kpiStats.growth.sub}
+                                trend={kpiStats.growth.trend}
+                                icon={TrendingUp}
+                                explanation={kpiStats.growth.exp}
+                            />
+                            <KPI_Card 
+                                title="Ponto de Atenção" 
+                                value={kpiStats.critical.name} 
+                                subtext={`Média: ${kpiStats.critical.val}`}
+                                trend="down"
+                                icon={AlertCircle}
+                                explanation={`Critério com menor desempenho no recorte ${yearView === 'COMPARATIVO' ? '2025' : yearView}.`}
+                            />
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-2 italic text-right px-2">
+                        *Obs.: O período de 2025 refere-se ao resultado acumulado de jan a nov.
+                        </p>
+                    </div>
+
+                    {/* Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                        
+                        {/* Radar */}
+                        <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col">
+                        <h3 className="text-lg font-bold text-slate-800 mb-1">Competências {entity} ({yearView})</h3>
+                        <p className="text-xs text-slate-500 mb-4">Visualização de equilíbrio entre os pilares de qualidade.</p>
+                        <div className="flex-1 min-h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart outerRadius="65%" data={radarData}>
+                                <PolarGrid stroke="#e2e8f0" />
+                                <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10 }} />
+                                <PolarRadiusAxis angle={30} domain={[60, 100]} tick={false} />
+                                
+                                {(yearView === 'COMPARATIVO' || yearView === '2024') && (
+                                    <Radar
+                                    name="2024"
+                                    dataKey="A"
+                                    stroke="#94a3b8"
+                                    fill="#94a3b8"
+                                    fillOpacity={yearView === '2024' ? 0.5 : 0.2}
+                                    />
+                                )}
+                                
+                                {(yearView === 'COMPARATIVO' || yearView === '2025') && (
+                                    <Radar
+                                    name="2025"
+                                    dataKey="B"
+                                    stroke={entityConfig.color}
+                                    fill={entityConfig.color}
+                                    fillOpacity={yearView === '2025' ? 0.5 : 0.4}
+                                    />
+                                )}
+                                
+                                <Legend verticalAlign="bottom" height={36}/>
+                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                            </RadarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <StrategicAnalysisBox text={radarInsight.text} type={radarInsight.type} />
+                        <NoteFooter />
+                        </div>
+
+                        {/* Bar */}
+                        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col">
+                        <h3 className="text-lg font-bold text-slate-800 mb-1">Evolução dos Indicadores - {entity}</h3>
+                        <p className="text-xs text-slate-500 mb-4">Comparativo direto de performance entre os ciclos.</p>
+                        <div className="flex-1 min-h-[350px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                                data={barData}
+                                margin={{ top: 25, right: 30, left: 20, bottom: 5 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
+                                <YAxis domain={[50, 100]} axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
+                                <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                                <Legend iconType="circle" />
+                                
+                                {(yearView === 'COMPARATIVO' || yearView === '2024') && (
+                                    <Bar dataKey="2024" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={yearView === '2024' ? 60 : 40}>
+                                    <LabelList dataKey="2024" position="top" fill="#64748b" fontSize={11} formatter={(v) => v > 0 ? v : ''} />
+                                    </Bar>
+                                )}
+                                
+                                {(yearView === 'COMPARATIVO' || yearView === '2025') && (
+                                    <Bar dataKey="2025" fill={entityConfig.color} radius={[4, 4, 0, 0]} barSize={yearView === '2025' ? 60 : 40}>
+                                    <LabelList dataKey="2025" position="top" fill={entityConfig.color} fontSize={11} fontWeight="bold" />
+                                    </Bar>
+                                )}
+
+                            </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <StrategicAnalysisBox text={barInsight.text} type={barInsight.type} />
+                        <NoteFooter />
+                        </div>
+                    </div>
+
+                    {/* Ranking */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-8">
+                        <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 mb-1">Ranking de Unidades {entity} ({yearView === 'COMPARATIVO' ? '2025' : yearView})</h3>
+                            <p className="text-sm text-slate-500">Posicionamento relativo baseado no índice geral de satisfação.</p>
+                        </div>
+                        </div>
+                        
+                        <div className="h-[500px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                            layout="vertical"
+                            data={rankingData}
+                            margin={{ top: 5, right: 50, left: 40, bottom: 5 }}
+                            >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
+                            <XAxis type="number" domain={[70, 100]} hide />
+                            <YAxis 
+                                dataKey="name" 
+                                type="category" 
+                                width={220} 
+                                tick={{ fill: '#475569', fontSize: 10, fontWeight: 500 }} 
+                                axisLine={false} 
+                                tickLine={false}
+                            />
+                            <Tooltip 
+                                cursor={{fill: '#f8fafc'}}
+                                contentStyle={{ borderRadius: '8px', border: 'none' }}
+                                formatter={(value) => [`${value}%`, 'Satisfação']}
+                            />
+                            <Bar dataKey="satisfacao" fill={entityConfig.color} radius={[0, 4, 4, 0]} barSize={20}>
+                                <LabelList dataKey="satisfacao" position="right" fill={entityConfig.color} fontSize={11} fontWeight="bold" formatter={(v) => `${v}%`} />
+                                {rankingData.map((entry, index) => (
+                                <cell key={`cell-${index}`} fill={entry.name === selectedUnit ? '#f59e0b' : entityConfig.color} />
+                                ))}
+                            </Bar>
+                            <ReferenceLine x={averageSatisfaction} stroke="green" strokeDasharray="3 3" label={{ position: 'top', value: `Média ${averageSatisfaction}%`, fill: 'green', fontSize: 10 }} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                        </div>
+                        <StrategicAnalysisBox text={rankingInsight.text} type={rankingInsight.type} />
+                        <NoteFooter />
+                    </div>
+                </div>
+            );
+        }
+
+        // --- RENDERIZAÇÃO ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<IntegratedDashboard />);
+    </script>
+</body>
+</html>
